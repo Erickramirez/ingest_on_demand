@@ -146,15 +146,15 @@ data is loaded into dimension and fact tables. This table definition is in `ddl_
 
 ### ETL Pipeline
 
-The data is extracted from Good
-drive [csv file](https://drive.google.com/file/d/14JcOSJAWqKOUNyadVZDPm7FplA7XYhrU/view?usp=sharing) to the
-explained `Datasets`. It is necessary to transform the data into the `dimensions` and `facts`; it is performed
-downloading the file and load it a clean stage table. Some of the transformations are related only to select some
-columns and remove the duplicated data (distinct), and in other cases, it is necessary to modify the type; for instance,
-the `a string of geometric point ` in `points` (geometric type)
-The etl for both dataset are in the methods: `execute_pg_tasks` and `load_csv` in the file `etl.py`, To log each step
-there is decorators to write logs over each event. In a normal orchestration solution it contains retries if there is a
-fail, to simulate this there is a decorator to perform 3 retries on each stesp steps performed:
+The data is extracted from Google
+drive [csv file](https://drive.google.com/file/d/14JcOSJAWqKOUNyadVZDPm7FplA7XYhrU/view?usp=sharing) to the 
+explained Datasets. It is necessary to transform the data into the dimensions and facts; it is performed by 
+downloading the file and loading it into a clean stage table. Some of the transformations are related only to 
+selecting some columns and removing the duplicated data (distinct), and in other cases, it is necessary to 
+modify the type; for instance, the string of geometric point in points (geometric type) 
+The ETL for both dataset are in the methods: execute_pg_tasks and load_csv in the file etl.py, 
+To log each step there is decorators to write logs over each event. In a typical orchestration solution, 
+it contains retries if there is a failure. There is a decorator to perform three retries on each step performed:
 
 1. **load-csv** download file and load it to postgreSQL
 2. **create_schemas** create the schemas: `trips`, `logs` and `trips_stage`

@@ -196,13 +196,7 @@ def load_csv(
     :param pg_db: database to connect
     :param table_name: table name to save the data
     :param kwargs: keyword argument used for logging
-    :return:
-    """
-    """
-        download file
-    :param uri: public uri to download
-    :param file_path: file location
-    :return: file name
+    :return: None
     """
     if not (os.path.isfile(file_path)):
         urllib.request.urlretrieve(uri, file_path)

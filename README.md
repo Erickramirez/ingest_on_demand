@@ -1,7 +1,8 @@
 # Ingest on demand
 
-This project has as output a Data warehouse solution. It includes building an ETL pipeline that extracts their data from
-Google Drive, stages them in a PostgreSQL instance, and transforms data into a set of dimensional tables.
+This project has as output a Data warehouse solution. It includes building an ETL pipeline using an Airflow DAG that
+extracts their data from Google Drive, stages them in a PostgreSQL instance, and transforms data into a set of
+dimensional tables.
 
 Additional, there is an API service to analyze the data ingested.
 
@@ -11,9 +12,7 @@ Additional, there is an API service to analyze the data ingested.
 
 The environment needed for this project:
 
-1. [Python 3](https://www.python.org/downloads/)
-2. [PostgreSQL instance](https://www.postgresql.org/)
-3. install the requirements in `requirements.txt`
+1. [Airflow - Astronomer Software](https://docs.astronomer.io/software/quickstart/)
 
 ### Explanation of the files in the repository
 
@@ -32,28 +31,19 @@ The environment needed for this project:
 3. **requirement.txt** libraries to install
 4. **run_ingest_on_demand.sh** shell script to run the etl pipeline
 5. **sql_queries** sql files as sample queries
+6. **airflow_implementation** airflow implementation
 
 ### Instructions to run the etl pipeline
 
-1. clone the github repository: `git clone https://github.com/Erickramirez/ingest-on-demand.git`
+1. clone the github repository: `git clone https://github.com/Erickramirez/ingest_on_demand.git`
 2. verify the prerequisites
-3. Update the PosgreSQL configuration in the file `ingest_on_demand/settings.py` specifically in the
-   section `# PG configuration`
-    1. About the passwords, use `environment variables` or when you are running the pipeline add the parameters
-    2. to add parameters like 'pg_username' and 'pg_password' add `--pg_username=<username> --pg_password=<password>` or
-       use env variables, for instance `EXPORT PG_USERNAME=<username>`
-4. install the requirements.txt with the command `pip install -r requirements.txt`, It is recommended to have an
-   environment like `pyenv` or `anaconda`
-5. Execute ETL process, there are 2 forms to execute it:
-    1. all at once, execute the shell script: `./run_ingest_on_demand.sh`
-    2. run the pipeline step by step:
-   ```
-   python -m ingest_on_demand.cli load-csv
-   python -m ingest_on_demand.cli execute-pg-task --event_name=create_schemas
-   python -m ingest_on_demand.cli execute-pg-task --event_name=create_tables
-   python -m ingest_on_demand.cli execute-pg-task --event_name=update_dimension_tables
-   python -m ingest_on_demand.cli execute-pg-task --event_name=update_fact_tables
-   ```
+3. go to `airflow_implementation`: `cd airflow_implementation`
+4. run airflow: `astro dev stop && astro dev start`
+5. open a web browser
+6. go to `http://localhost:8080/`
+7. The default credentials are `admin`:`admin`
+8. enable the dag: `ingest_on_demand`
+9. run the dag: `ingest_on_demand`
 
 ### Instructions to run the application
 
@@ -84,29 +74,6 @@ have a postgeSQL instance installed
 source| location                                                                                       | 
 --- |------------------------------------------------------------------------------------------------| 
 Google drive | [csv file](https://drive.google.com/file/d/14JcOSJAWqKOUNyadVZDPm7FplA7XYhrU/view?usp=sharing) | 
-
-# Usage example
-
-Show help:
-
-```
-python -m ingest_on_demand.cli --help
-```
-
-Output:
-
-```
-Usage: python -m ingest_on_demand.cli [OPTIONS] COMMAND [ARGS]...
-
-Options:
-  --version  Show the version and exit.
-  --help     Show this message and exit.
-
-Commands:
-  execute-pg-task  Perform SQL operation in PostgreSQL 
-  load-csv         Download and load data from Google Drive to PostgreSQL
-
-```
 
 ## About the Data Warehouse solution
 
@@ -140,36 +107,43 @@ data is loaded into dimension and fact tables. This table definition is in `ddl_
     - **trips.fact_group_trips:** aggregate fact table based on region and date to get the area of that combination and
       the total number of trips. event_date, region_id, box_coord, number_of_trips To allow scalability the fact tables
       are partitioned by year and month,on the column `event_timestamp`
-4. **Logs** They are in the schema named: `logs`
-    - **logs.trips_log:** log the steps performed, log_id, log_name, pipeline_version_instance, event, event_type,
-      execution_date_time, duration_sec
 
 ### ETL Pipeline
 
-The data is extracted from Google
-drive [csv file](https://drive.google.com/file/d/14JcOSJAWqKOUNyadVZDPm7FplA7XYhrU/view?usp=sharing) to the 
-explained Datasets. It is necessary to transform the data into the dimensions and facts; it is performed by 
-downloading the file and loading it into a clean stage table. Some of the transformations are related only to 
-selecting some columns and removing the duplicated data (distinct), and in other cases, it is necessary to 
-modify the type; for instance, the string of geometric point in points (geometric type) 
-The ETL for both dataset are in the methods: execute_pg_tasks and load_csv in the file etl.py, 
-To log each step there is decorators to write logs over each event. In a typical orchestration solution, 
-it contains retries if there is a failure. There is a decorator to perform three retries on each step performed:
+![airflow dag](images/dag.png)
 
-1. **load-csv** download file and load it to postgreSQL
-2. **create_schemas** create the schemas: `trips`, `logs` and `trips_stage`
-3. **create_tables** create the tables in each schema, perform drop and create for the stage tables
-4. **update_dimension_tables** fills the dimension tables
-5. **update_fact_tables** perform operations to fill fact tables, it starts with delta fact, fact and aggregate fact.
+The data is extracted from Google
+drive [csv file](https://drive.google.com/file/d/14JcOSJAWqKOUNyadVZDPm7FplA7XYhrU/view?usp=sharing) to the explained
+Datasets. It is necessary to transform the data into the dimensions and facts; it is performed by downloading the file
+and loading it into a clean stage table. Some of the transformations are related only to selecting some columns and
+removing the duplicated data (distinct), and in other cases, it is necessary to modify the type; for instance, the
+string of geometric point in points (geometric type)
+The ETL for both dataset are in the methods: execute_pg_tasks and load_csv in the file etl.py, To log each step there is
+decorators to write logs over each event.
+
+1. **start** Dummy operator
+2. **create-stage-schemas-and-tables** create the schema:  `trips_stage` and tables in `Staging tables`
+3. **create-final-schemas-and-tables** create the schema:  `trips` and tables in `Dimension tables` and `Fact tables`
+4. **load-csv** load table
+   from [csv file](https://drive.google.com/file/d/14JcOSJAWqKOUNyadVZDPm7FplA7XYhrU/view?usp=sharing) to
+   table `trips_stage.trips`
+5. **fill dimension tables** update dimension tables:
+    1. **fill-dim-datasource**
+    2. **fill-dim-region**
+    3. **fill-dim-time**
+6. **fill_fact_delta_trips** truncate and fill delta fact table
+7. **fill_fact_trips** update fact tables with fact delta table
+8. **fill_group_fact_trips** perform aggregate fact table
+9. **Run_data_quality_checks** check if the tables have data
 
 ### Features:
 
 - It is an automated process to ingest and store the data
 - Trips with similar origin, destination, and time of day should be grouped together. Table created: **
   trips.fact_group_trips:**
-- Inform about the status: logs created
+- Inform about the status: consume airflow logs using the connection`airflow_db` (localhost:5432/postgres)
 - Scalability: It is using a delta approach, and the fact tables have partitions
-- Container solution
+- Container solution with astronomer
 - queries to answer these questions, check the folder: `sql_queries`
 
 ### Features to improve
@@ -177,7 +151,12 @@ it contains retries if there is a failure. There is a decorator to perform three
 - Use a maintenance of partitions, using `partman`
 - For scalability, the partitions will work fine for millions of rows, but a better data solution will be using column
   base storage
-- Add QA steps on each step to validate the inputs and outputs, currently it is using retries but a more robust solution
-  will include QA steps
+- Add more QA steps to check integrity of the data
 - If these are events from devices, a better solution will be a data streaming pipeline
-- It can be easily attached to Airflow for orchestration
+- Add parameters to the airflow solution
+- Cloud Provider set up for GCP
+  - Create a data lake using GCS
+  - Use cloud composer as airflow solution
+  - Use kubernetes secret for the connections to get a better security configuration.
+  - To create a complete Docker solution use the folder `ingest_on_demand` as an image in the Container Registry and  [GKEStartPodOperator](https://airflow.apache.org/docs/apache-airflow-providers-google/stable/operators/cloud/kubernetes_engine.html)
+  - For the DB solution use Clod SQL instances 
